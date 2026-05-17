@@ -297,13 +297,20 @@ function MenuCard({ item, ctx }) {
 // 3. ITEM DETAIL (BottomSheet)
 // ============================================================
 function ItemDetailSheet({ open, itemId, onClose, ctx }) {
-  const item = useMemo13(() => window.MENU.find(m => m.id === itemId), [itemId]);
-  const optionGroupIds = item ? (window.OPTIONS_BY_CAT[item.cat] || []) : [];
+  // ค้นหาจาก API items ก่อน ถ้าไม่เจอค่อย fallback ไป window.MENU
+  const item = useMemo13(() => {
+    const fromApi = (ctx.menuItems || []).find(m => m.id === itemId);
+    if (fromApi) return fromApi;
+    return (window.MENU || []).find(m => m.id === itemId);
+  }, [itemId, ctx.menuItems]);
+
+  const optionGroupIds = item ? ((window.OPTIONS_BY_CAT && window.OPTIONS_BY_CAT[item.cat]) || []) : [];
 
   const initialOptions = useMemo13(() => {
     const obj = {};
     optionGroupIds.forEach(gid => {
-      const grp = window.OPTION_GROUPS[gid];
+      const grp = window.OPTION_GROUPS && window.OPTION_GROUPS[gid];
+      if (!grp) return;
       if (grp.type === "radio") {
         const def = grp.choices.find(c => c.default) || grp.choices[0];
         obj[gid] = def.id;
@@ -348,6 +355,7 @@ function ItemDetailSheet({ open, itemId, onClose, ctx }) {
   const onAdd = () => {
     ctx.addToCart({
       itemId: item.id,
+      name: item.name,
       qty,
       options: { ...options },
       note,

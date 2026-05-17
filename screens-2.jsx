@@ -1,19 +1,21 @@
 // Screens 4-7: Cart, Payment, Tracking, History
 const { useState: useState47, useEffect: useEffect47, useMemo: useMemo47, useRef: useRef47 } = React;
 
-// Helper: build option summary string
+// Helper: build option summary string (graceful — returns "" for API items with no mock options)
 function optionSummary(line) {
-  const item = window.MENU.find(m => m.id === line.itemId);
+  if (!window.OPTIONS_BY_CAT || !window.OPTION_GROUPS) return "";
+  const item = (window.MENU || []).find(m => m.id === line.itemId);
   if (!item) return "";
   const groups = window.OPTIONS_BY_CAT[item.cat] || [];
   const parts = [];
   groups.forEach(gid => {
     const grp = window.OPTION_GROUPS[gid];
+    if (!grp) return;
     if (grp.type === "radio") {
-      const c = grp.choices.find(c => c.id === line.options[gid]);
+      const c = grp.choices.find(c => c.id === (line.options || {})[gid]);
       if (c) parts.push(c.name);
     } else {
-      (line.options[gid] || []).forEach(id => {
+      ((line.options || {})[gid] || []).forEach(id => {
         const c = grp.choices.find(c => c.id === id);
         if (c) parts.push("+ " + c.name);
       });
@@ -97,8 +99,10 @@ function CartScreen({ ctx }) {
 }
 
 function CartLine({ line, ctx, idx }) {
-  const item = window.MENU.find(m => m.id === line.itemId);
-  if (!item) return null;
+  // ใช้ name ที่เก็บใน line ก่อน ถ้าไม่มีค่อย lookup จาก menuItems หรือ window.MENU
+  const item = (ctx.menuItems || []).find(m => m.id === line.itemId)
+            || (window.MENU || []).find(m => m.id === line.itemId)
+            || { name: line.name || "รายการอาหาร", price: line.unitPrice };
   const summary = optionSummary(line);
   const lineTotal = line.unitPrice * line.qty;
 
@@ -413,7 +417,9 @@ function TrackingScreen({ ctx }) {
             <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
               <div className="divider" />
               {order.items.map((line, idx) => {
-                const item = window.MENU.find(m => m.id === line.itemId);
+                const item = (ctx.menuItems || []).find(m => m.id === line.itemId)
+                          || (window.MENU || []).find(m => m.id === line.itemId)
+                          || { name: line.name || "รายการอาหาร" };
                 return (
                   <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                     <div style={{ width: 36, height: 36, flexShrink: 0, borderRadius: 8, overflow: "hidden" }}><DishArt item={item} size="sm" /></div>

@@ -109,10 +109,12 @@ function App() {
 
   // ── Quick add (default options, qty 1) ───────────────────
   const quickAdd = useCallbackApp((item) => {
-    const groups = window.OPTIONS_BY_CAT[item.cat] || [];
+    // Build default options from mock data if available; API items may have no options
+    const groups = (window.OPTIONS_BY_CAT && window.OPTIONS_BY_CAT[item.cat]) || [];
     const opts = {};
     groups.forEach((gid) => {
-      const grp = window.OPTION_GROUPS[gid];
+      const grp = window.OPTION_GROUPS && window.OPTION_GROUPS[gid];
+      if (!grp) return;
       if (grp.type === "radio") {
         const def = grp.choices.find((c) => c.default) || grp.choices[0];
         opts[gid] = def.id;
@@ -122,7 +124,7 @@ function App() {
     });
     setCart((c) => [...c, {
       _id: `l${++lineCounter.current}`,
-      itemId: item.id, qty: 1, options: opts, note: "", unitPrice: item.price,
+      itemId: item.id, name: item.name, qty: 1, options: opts, note: "", unitPrice: item.price,
     }]);
     showToast(`เพิ่ม ${item.name} แล้ว`, { icon: "Check" });
   }, [showToast]);
