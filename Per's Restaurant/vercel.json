@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "routes": [
+    { "src": "/kitchen", "dest": "/kitchen.html" },
+    { "src": "/owner",   "dest": "/owner.html" },
+    { "src": "/(.*)",    "dest": "/$1" }
+  ]
+}
