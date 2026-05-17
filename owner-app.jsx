@@ -3,6 +3,8 @@
 const { useState: useSO, useEffect: useEO, useMemo: useMO, useCallback: useCBO } = React;
 
 // Normalise API menu item → owner shape
+// IMPORTANT: DishArt + OMenuEdit ใช้ชื่อ field `imageUrl` (camelCase) เท่านั้น
+// ห้ามใช้ `image` เด็ดขาด — รูปจะหายไปจาก UI
 function normalizeMenuItem(m) {
   return {
     id:        m.id,
@@ -12,10 +14,10 @@ function normalizeMenuItem(m) {
     price:     parseFloat(m.price || 0),
     available: m.is_available ?? m.available ?? true,
     rec:       m.is_recommended ?? m.rec ?? false,
-    image:     m.image_url || m.image || null,
+    imageUrl:  m.image_url || m.imageUrl || m.image || null,
     desc:      m.description || m.desc || "",
     rating:    parseFloat(m.rating || 4.5),
-    reviews:   m.reviews || 0,
+    reviews:   m.review_count ?? m.reviews ?? 0,
   };
 }
 
@@ -54,16 +56,19 @@ function normalizeStaff(s) {
 }
 
 // Normalise API table → owner shape
+// Schema: restaurant_tables(id INT PK, label, status, qr_code, capacity, zone, is_active, updated_at)
+// `id` คือเลขโต๊ะ (1–12) เลย
 function normalizeTable(t) {
+  const number = t.number ?? t.table_number ?? t.id;
   return {
     id:       t.id,
-    number:   t.table_number,
-    seats:    t.capacity || t.seats || 4,
-    zone:     t.zone || "ทั่วไป",
-    active:   t.status !== "closed" && (t.is_active ?? t.active ?? true),
-    status:   t.status || "free",
-    label:    t.label || `โต๊ะ ${t.table_number}`,
-    qrUrl:    t.qr_url || null,
+    number,
+    seats:    t.capacity ?? t.seats ?? 4,
+    zone:     t.zone || "ในร้าน",
+    active:   t.is_active ?? t.active ?? true,
+    status:   t.status || "empty",
+    label:    t.label || `โต๊ะ ${number}`,
+    qrUrl:    t.qr_code || t.qr_url || null,
   };
 }
 
@@ -137,17 +142,29 @@ function OwnerApp() {
   }, [showToast]);
 
   const saveMenu = useCBO(async (data) => {
+    // Map UI shape → API shape (backend คาด camelCase: categoryId, description, isAvailable)
+    const apiBody = {
+      categoryId:    data.cat,
+      name:          data.name,
+      nameEn:        data.nameEn || null,
+      description:   data.desc || null,
+      price:         Number(data.price) || 0,
+      imageUrl:      data.imageUrl || null,
+      isRecommended: !!data.rec,
+      isAvailable:   data.available !== false,
+    };
+
     try {
       if (data.id) {
-        const updated = await API.menu.update(data.id, data);
+        const updated = await API.menu.update(data.id, apiBody);
         setMenu((list) => list.map(m => m.id === data.id ? normalizeMenuItem(updated) : m));
       } else {
-        const created = await API.menu.create(data);
+        const created = await API.menu.create(apiBody);
         setMenu((list) => [...list, normalizeMenuItem(created)]);
       }
       showToast(data.id ? "อัปเดตเมนูแล้ว" : "เพิ่มเมนูใหม่แล้ว", "Check");
     } catch (err) {
-      // Optimistic fallback
+      // Optimistic fallback (offline mode — เก็บ UI shape ไว้)
       setMenu((list) => {
         if (data.id) return list.map(m => m.id === data.id ? { ...m, ...data } : m);
         return [...list, { ...data, id: `m${Date.now()}`, rating: 4.5, reviews: 0 }];
@@ -162,11 +179,109 @@ function OwnerApp() {
     try { await API.menu.remove(id); } catch {}
   }, [showToast]);
 
+  const saveTable = useCBO(async (data) => {
+    const apiBody = {
+      capacity: Number(data.seats) || 4,
+      zone:     data.zone,
+      label:    data.label || `โต๊ะ ${data.number}`,
+      isActive: data.active !== false,
+    };
+
+    try {
+      if (!data.id) {
+        // เพิ่มโต๊ะใหม่
+        const created = await API.owner.createTable({
+          id: data.number,
+          ...apiBody,
+        });
+        setTables((list) => [...list, normalizeTable(created)].sort((a, b) => a.id - b.id));
+        showToast(`เพิ่มโต๊ะ ${data.number} แล้ว`, "Check");
+      } else {
+        // แก้ไขโต๊ะเดิม
+        const updated = await API.owner.updateTable(data.id, apiBody);
+        setTables((list) => list.map(t => t.id === data.id ? normalizeTable(updated) : t));
+        showToast("บันทึกข้อมูลโต๊ะแล้ว", "Check");
+      }
+    } catch (err) {
+      // ถ้า conflict (โต๊ะซ้ำ) แจ้งเตือนชัดๆ
+      if (err.status === 409) {
+        showToast(err.message || "โต๊ะหมายเลขนี้มีอยู่แล้ว", "AlertCircle");
+        return;
+      }
+      // Backend ไม่ตอบ → fallback แบบ local เพื่อให้ UI ใช้งานได้
+      if (!data.id) {
+        setTables((list) => [
+          ...list,
+          {
+            id: data.number,
+            number: data.number,
+            seats: data.seats,
+            zone: data.zone,
+            active: data.active,
+            status: "empty",
+            label: `โต๊ะ ${data.number}`,
+          },
+        ]);
+        showToast(`เพิ่มโต๊ะ ${data.number} แล้ว (offline)`, "Check");
+      } else {
+        setTables((list) => list.map(t => t.id === data.id ? { ...t, ...data } : t));
+        showToast("บันทึกแล้ว (offline)", "Check");
+      }
+    }
+  }, [showToast]);
+
+  const deleteTable = useCBO(async (id) => {
+    const prev = tables;
+    setTables((list) => list.filter(t => t.id !== id));
+    try {
+      await API.owner.deleteTable(id);
+      showToast("ลบโต๊ะแล้ว", "Trash");
+    } catch (err) {
+      // กรณี soft-delete server อาจตอบ 200 พร้อม { softDeleted: true }
+      // — ถูกจัดเป็น success ของ fetch อยู่แล้ว ดังนั้น error ที่นี่คือพังจริงๆ
+      setTables(prev);
+      showToast(err.message || "ลบโต๊ะไม่สำเร็จ", "AlertCircle");
+    }
+  }, [tables, showToast]);
+
+  const saveStaff = useCBO(async (data) => {
+    const apiBody = {
+      username:    data.username,
+      displayName: data.displayName || data.name,
+      role:        data.role,
+      password:    data.password || undefined,
+    };
+    try {
+      if (data.id) {
+        const updated = await API.owner.staff.update(data.id, apiBody);
+        setStaff((list) => list.map(s => s.id === data.id ? normalizeStaff(updated) : s));
+      } else {
+        const created = await API.owner.staff.create(apiBody);
+        setStaff((list) => [...list, normalizeStaff(created)]);
+      }
+      showToast(data.id ? "อัปเดตพนักงานแล้ว" : "เพิ่มพนักงานแล้ว", "Check");
+    } catch (err) {
+      setStaff((list) => {
+        if (data.id) return list.map(s => s.id === data.id ? { ...s, ...data, name: data.name } : s);
+        return [...list, {
+          id: `u${Date.now()}`,
+          name: data.name,
+          username: data.username,
+          role: data.role,
+          active: true,
+          lastLogin: Date.now(),
+        }];
+      });
+      showToast(data.id ? "อัปเดตพนักงานแล้ว (offline)" : "เพิ่มพนักงานแล้ว (offline)", "Check");
+    }
+  }, [showToast]);
+
   const toggleStaff = useCBO(async (id) => {
     setStaff((list) => list.map(s => {
       if (s.id !== id) return s;
       const next = { ...s, active: !s.active };
-      API.owner.staff.update(id, { is_active: next.active }).catch(() => {});
+      // Backend คาด field `active` ไม่ใช่ `is_active`
+      API.owner.staff.update(id, { active: next.active }).catch(() => {});
       return next;
     }));
     showToast("อัปเดตสถานะพนักงานแล้ว", "Check");
@@ -187,7 +302,9 @@ function OwnerApp() {
     activeOrders,
     nav: setPage,
     openOrder: setOpenOrderId,
-    refundOrder, toggleMenu, saveMenu, deleteMenu, toggleStaff,
+    refundOrder, toggleMenu, saveMenu, deleteMenu,
+    saveTable, deleteTable,
+    saveStaff, toggleStaff,
     showToast,
   };
 

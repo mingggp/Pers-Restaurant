@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const http    = require('http');
+const path    = require('path');
 const express = require('express');
 const cors    = require('cors');
 const helmet  = require('helmet');
@@ -13,6 +14,7 @@ const menuRouter   = require('./routes/menu');
 const ordersRouter = require('./routes/orders');
 const kitchenRouter = require('./routes/kitchen');
 const ownerRouter  = require('./routes/owner');
+const uploadRouter = require('./routes/upload');
 const { errorHandler } = require('./middleware/errorHandler');
 const { attachWebSocket } = require('./websocket');
 
@@ -20,7 +22,10 @@ const { attachWebSocket } = require('./websocket');
 const app = express();
 
 // Security headers
-app.use(helmet());
+// crossOriginResourcePolicy = cross-origin → ให้ /uploads/* โหลดข้าม origin ได้ (frontend คนละโดเมน)
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 
 // CORS
 app.use(cors({
@@ -62,12 +67,19 @@ const authLimiter = rateLimit({
 });
 app.use('/auth/', authLimiter);
 
+// Static: เสิร์ฟไฟล์รูปที่อัปโหลด
+app.use('/uploads', express.static(path.resolve(__dirname, '..', 'uploads'), {
+  maxAge: '7d',
+  immutable: false,
+}));
+
 // ── Routes ────────────────────────────────────────────────
 app.use('/auth',         authRouter);
 app.use('/api/menu',     menuRouter);
 app.use('/api/orders',   ordersRouter);
 app.use('/api/kitchen',  kitchenRouter);
 app.use('/api/owner',    ownerRouter);
+app.use('/api/upload',   uploadRouter);
 
 // Health check
 app.get('/health', (req, res) => {

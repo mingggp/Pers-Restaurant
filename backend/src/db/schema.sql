@@ -97,8 +97,16 @@ CREATE TABLE IF NOT EXISTS restaurant_tables (
   qr_code     TEXT,                     -- QR code data
   status      TEXT NOT NULL DEFAULT 'empty' CHECK (status IN ('empty', 'occupied', 'reserved')),
   label       TEXT,                     -- e.g. "โต๊ะ 5"
+  capacity    INT NOT NULL DEFAULT 4,   -- จำนวนที่นั่ง
+  zone        TEXT NOT NULL DEFAULT 'ในร้าน',
+  is_active   BOOLEAN NOT NULL DEFAULT TRUE,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migration safety: เพิ่ม column ในกรณี table ถูกสร้างไปแล้วก่อนที่จะมี capacity/zone/is_active
+ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS capacity  INT     NOT NULL DEFAULT 4;
+ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS zone      TEXT    NOT NULL DEFAULT 'ในร้าน';
+ALTER TABLE restaurant_tables ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
 
 -- ============================================================
 -- ORDERS

@@ -61,19 +61,19 @@ INSERT INTO option_choices (option_group_id, name, price_delta, is_default, sort
 ON CONFLICT DO NOTHING;
 
 -- Restaurant Tables (12 tables)
-INSERT INTO restaurant_tables (id, label, status) VALUES
-  (1,  'โต๊ะ 1',  'empty'),
-  (2,  'โต๊ะ 2',  'empty'),
-  (3,  'โต๊ะ 3',  'empty'),
-  (4,  'โต๊ะ 4',  'empty'),
-  (5,  'โต๊ะ 5',  'empty'),
-  (6,  'โต๊ะ 6',  'empty'),
-  (7,  'โต๊ะ 7',  'empty'),
-  (8,  'โต๊ะ 8',  'empty'),
-  (9,  'โต๊ะ 9',  'empty'),
-  (10, 'โต๊ะ 10', 'empty'),
-  (11, 'โต๊ะ 11', 'empty'),
-  (12, 'โต๊ะ 12', 'empty')
+INSERT INTO restaurant_tables (id, label, status, capacity, zone, is_active) VALUES
+  (1,  'โต๊ะ 1',  'empty', 2,  'ในร้าน',  TRUE),
+  (2,  'โต๊ะ 2',  'empty', 2,  'ในร้าน',  TRUE),
+  (3,  'โต๊ะ 3',  'empty', 4,  'ในร้าน',  TRUE),
+  (4,  'โต๊ะ 4',  'empty', 4,  'ในร้าน',  TRUE),
+  (5,  'โต๊ะ 5',  'empty', 4,  'ในร้าน',  TRUE),
+  (6,  'โต๊ะ 6',  'empty', 4,  'ในร้าน',  TRUE),
+  (7,  'โต๊ะ 7',  'empty', 4,  'ระเบียง', TRUE),
+  (8,  'โต๊ะ 8',  'empty', 6,  'ระเบียง', TRUE),
+  (9,  'โต๊ะ 9',  'empty', 6,  'ระเบียง', TRUE),
+  (10, 'โต๊ะ 10', 'empty', 8,  'ระเบียง', TRUE),
+  (11, 'โต๊ะ 11', 'empty', 8,  'ห้อง VIP', TRUE),
+  (12, 'โต๊ะ 12', 'empty', 10, 'ห้อง VIP', FALSE)
 ON CONFLICT (id) DO NOTHING;
 
 -- Menu Items (18 items matching the design)

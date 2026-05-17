@@ -7,9 +7,9 @@
 //   utils.processImage(src, pixelCrop, maxSize=800, quality=0.85) → Base64
 //   utils.makeCenterCrop(imgW, imgH, aspect) → { x, y, width, height } (pct)
 //
-// TODO: Production — upload to S3/Cloudinary
-// Replace this Base64 logic with an actual upload API call
-// Return URL only, don't store Base64 in DB.
+// Flow: ผู้ใช้เลือกรูป → crop/resize ใน browser → Base64 dataURL → ส่งไป POST /api/upload
+//       → backend เก็บไฟล์ที่ /uploads/xxx.jpg → คืน absolute URL กลับมา
+//       → frontend เก็บแค่ URL (ไม่เก็บ Base64) — backend ดีกว่าเก็บ binary ใน DB
 
 const { useState: useSI, useEffect: useEI, useRef: useRI, useCallback: useCBI, useMemo: useMI } = React;
 
@@ -183,7 +183,21 @@ function ImageUpload({ value, onChange, onRemove, maxSizeMB = MAX_SIZE_MB_DEFAUL
         onSave={async (imgEl, pixelCrop) => {
           try {
             const dataUrl = await processImage(imgEl, pixelCrop);
-            onChange?.(dataUrl);
+
+            // อัปโหลดไปยัง backend (POST /api/upload) เพื่อให้ได้ URL จริง
+            // ถ้า backend ไม่พร้อม (เช่นพัฒนา local ที่ไม่มี server) ใช้ dataUrl ไปก่อน
+            let finalUrl = dataUrl;
+            try {
+              if (window.API && window.API.uploads) {
+                const r = await window.API.uploads.image(dataUrl);
+                if (r?.url) finalUrl = r.url;
+              }
+            } catch (upErr) {
+              // backend ตอบ error → ใช้ Base64 ไปก่อนแบบ offline
+              emitError("อัปโหลดไปเซิร์ฟเวอร์ไม่สำเร็จ — ใช้รูปแบบ offline ชั่วคราว");
+            }
+
+            onChange?.(finalUrl);
             setCropSrc(null);
           } catch (err) {
             emitError("ประมวลผลรูปไม่สำเร็จ");

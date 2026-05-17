@@ -229,6 +229,44 @@ function OMenuEdit({ open, item, onClose, onSave, onError }) {
 // =====================================================
 function OTables({ ctx }) {
   const [editing, setEditing] = useSB(null);
+  const [deleting, setDeleting] = useSB(null);
+  const blank = { number: "", seats: 4, zone: "ในร้าน", active: true };
+  const [form, setForm] = useSB(blank);
+
+  useEB(() => {
+    if (!editing) return;
+    if (editing === "new") {
+      // Suggest next available table number
+      const maxNum = ctx.tables.reduce((m, t) => Math.max(m, Number(t.number) || 0), 0);
+      setForm({ ...blank, number: maxNum + 1 });
+    } else {
+      setForm({
+        number: editing.number ?? "",
+        seats:  editing.seats ?? 4,
+        zone:   editing.zone || "ในร้าน",
+        active: editing.active !== false,
+      });
+    }
+  }, [editing]);
+
+  const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSave = () => {
+    if (!form.number) {
+      ctx.showToast("กรุณาระบุหมายเลขโต๊ะ", "AlertCircle");
+      return;
+    }
+    if (ctx.saveTable) {
+      ctx.saveTable({
+        id: editing === "new" ? null : editing.id,
+        number: Number(form.number),
+        seats: Number(form.seats) || 4,
+        zone: form.zone,
+        active: !!form.active,
+      });
+    }
+    setEditing(null);
+  };
 
   return (
     <div className="o-fade-in">
@@ -245,13 +283,13 @@ function OTables({ ctx }) {
       <div className="o-tables-grid">
         {ctx.tables.map(t => (
           <div key={t.id} className={`o-table-card ${!t.active ? "disabled" : ""}`}>
-            <div className="num">{t.number}</div>
+            <div className="num">{t.number ?? t.id}</div>
             <div className="meta">
               <strong>{t.seats}</strong> ที่นั่ง · {t.zone}
             </div>
             <Badge variant={t.active ? "success" : "neutral"}>{t.active ? "เปิดใช้งาน" : "ปิดใช้งาน"}</Badge>
             <div className="acts">
-              <button className="o-btn" onClick={() => ctx.showToast(`ดาวน์โหลด QR โต๊ะ ${t.number}`, "Download")}>
+              <button className="o-btn" onClick={() => ctx.showToast(`ดาวน์โหลด QR โต๊ะ ${t.number ?? t.id}`, "Download")}>
                 <Icon name="QrCode" size={14} /> QR
               </button>
               <button className="o-btn" onClick={() => setEditing(t)}>
@@ -281,33 +319,90 @@ function OTables({ ctx }) {
       <OModal
         open={!!editing}
         onClose={() => setEditing(null)}
-        title={editing === "new" ? "เพิ่มโต๊ะใหม่" : `แก้ไขโต๊ะ ${editing?.number}`}
+        title={editing === "new" ? "เพิ่มโต๊ะใหม่" : `แก้ไขโต๊ะ ${editing?.number ?? editing?.id}`}
         subtitle="ตั้งค่ารายละเอียดของโต๊ะ"
         footer={
           <>
+            {editing && editing !== "new" && (
+              <button
+                className="o-btn danger"
+                style={{ marginRight: "auto" }}
+                onClick={() => { setDeleting(editing); setEditing(null); }}
+              >
+                <Icon name="Trash" size={14} /> ลบโต๊ะ
+              </button>
+            )}
             <button className="o-btn ghost" onClick={() => setEditing(null)}>ยกเลิก</button>
-            <button className="o-btn primary" onClick={() => { setEditing(null); ctx.showToast("บันทึกแล้ว", "Check"); }}>บันทึก</button>
+            <button className="o-btn primary" onClick={handleSave}><Icon name="Check" size={14} /> บันทึก</button>
           </>
         }
       >
         <div className="o-form-row">
           <label>หมายเลขโต๊ะ *</label>
-          <input className="o-input" type="number" defaultValue={editing?.number || ""} placeholder="13" />
+          <input
+            className="o-input"
+            type="number"
+            value={form.number}
+            onChange={(e) => update("number", e.target.value)}
+            placeholder="13"
+          />
         </div>
         <div className="o-form-grid">
           <div className="o-form-row">
             <label>จำนวนที่นั่ง</label>
-            <input className="o-input" type="number" defaultValue={editing?.seats || 4} />
+            <input
+              className="o-input"
+              type="number"
+              value={form.seats}
+              onChange={(e) => update("seats", e.target.value)}
+            />
           </div>
           <div className="o-form-row">
             <label>โซน</label>
-            <select className="o-select" defaultValue={editing?.zone || "ในร้าน"} style={{ height: 40 }}>
+            <select
+              className="o-select"
+              value={form.zone}
+              onChange={(e) => update("zone", e.target.value)}
+              style={{ height: 40 }}
+            >
               <option>ในร้าน</option>
               <option>ระเบียง</option>
               <option>ห้อง VIP</option>
               <option>กลางแจ้ง</option>
             </select>
           </div>
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, background: "rgb(var(--bg-subtle))", borderRadius: 10, marginTop: 8, cursor: "pointer" }}>
+          <Toggle on={form.active} onChange={(v) => update("active", v)} ariaLabel="เปิด/ปิดโต๊ะ" />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600 }}>{form.active ? "เปิดใช้งาน" : "ปิดใช้งาน"}</div>
+            <div style={{ fontSize: 12, color: "rgb(var(--text-muted))" }}>{form.active ? "ลูกค้าสามารถสแกน QR ที่โต๊ะนี้ได้" : "โต๊ะถูกซ่อนจากการรับลูกค้า"}</div>
+          </div>
+        </label>
+      </OModal>
+
+      <OModal
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        title={`ลบโต๊ะ ${deleting?.number ?? deleting?.id}?`}
+        subtitle="ระบบจะลบโต๊ะนี้ออกจากร้าน — หากมีออเดอร์เก่าอ้างอยู่จะปิดใช้งานแทน"
+        footer={
+          <>
+            <button className="o-btn ghost" onClick={() => setDeleting(null)}>ยกเลิก</button>
+            <button
+              className="o-btn danger"
+              onClick={() => {
+                if (deleting && ctx.deleteTable) ctx.deleteTable(deleting.id);
+                setDeleting(null);
+              }}
+            >
+              <Icon name="Trash" size={14} /> ลบโต๊ะ
+            </button>
+          </>
+        }
+      >
+        <div style={{ fontSize: 13, color: "rgb(var(--text-muted))" }}>
+          การลบไม่สามารถย้อนกลับได้ — หากต้องการเพียงปิดการรับลูกค้า ให้ปิดสวิตช์ "เปิดใช้งาน" แทน
         </div>
       </OModal>
     </div>
@@ -457,6 +552,50 @@ function CategoryBars({ data }) {
 // =====================================================
 function OStaff({ ctx }) {
   const [editing, setEditing] = useSB(null);
+  const blank = { firstName: "", lastName: "", username: "", role: "kitchen", password: "" };
+  const [form, setForm] = useSB(blank);
+
+  useEB(() => {
+    if (!editing) return;
+    if (editing === "new") {
+      setForm(blank);
+    } else {
+      const parts = (editing.name || "").split(" ");
+      setForm({
+        firstName: parts[0] || "",
+        lastName:  parts.slice(1).join(" ") || "",
+        username:  editing.username || "",
+        role:      editing.role || "kitchen",
+        password:  "",
+      });
+    }
+  }, [editing]);
+
+  const update = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSave = () => {
+    if (!form.firstName.trim() || !form.username.trim()) {
+      ctx.showToast("กรุณากรอกชื่อและ username", "AlertCircle");
+      return;
+    }
+    if (editing === "new" && !form.password.trim()) {
+      ctx.showToast("กรุณากำหนดรหัสผ่านเริ่มต้น", "AlertCircle");
+      return;
+    }
+    if (ctx.saveStaff) {
+      ctx.saveStaff({
+        id: editing === "new" ? null : editing.id,
+        name: `${form.firstName} ${form.lastName}`.trim(),
+        displayName: `${form.firstName} ${form.lastName}`.trim(),
+        username: form.username.trim(),
+        role: form.role,
+        password: form.password || undefined,
+      });
+    } else {
+      ctx.showToast("บันทึกแล้ว", "Check");
+    }
+    setEditing(null);
+  };
 
   return (
     <div className="o-fade-in">
@@ -527,28 +666,28 @@ function OStaff({ ctx }) {
         footer={
           <>
             <button className="o-btn ghost" onClick={() => setEditing(null)}>ยกเลิก</button>
-            <button className="o-btn primary" onClick={() => { setEditing(null); ctx.showToast("บันทึกแล้ว", "Check"); }}>บันทึก</button>
+            <button className="o-btn primary" onClick={handleSave}><Icon name="Check" size={14} /> บันทึก</button>
           </>
         }
       >
         <div className="o-form-grid">
           <div className="o-form-row">
             <label>ชื่อ *</label>
-            <input className="o-input" defaultValue={editing?.name?.split(" ")[0] || ""} placeholder="ชื่อจริง" />
+            <input className="o-input" value={form.firstName} onChange={(e) => update("firstName", e.target.value)} placeholder="ชื่อจริง" />
           </div>
           <div className="o-form-row">
             <label>นามสกุล</label>
-            <input className="o-input" defaultValue={editing?.name?.split(" ")[1] || ""} placeholder="นามสกุล" />
+            <input className="o-input" value={form.lastName} onChange={(e) => update("lastName", e.target.value)} placeholder="นามสกุล" />
           </div>
         </div>
         <div className="o-form-grid">
           <div className="o-form-row">
             <label>Username *</label>
-            <input className="o-input" defaultValue={editing?.username || ""} placeholder="kitchen-staff" />
+            <input className="o-input" value={form.username} onChange={(e) => update("username", e.target.value)} placeholder="kitchen-staff" />
           </div>
           <div className="o-form-row">
             <label>บทบาท *</label>
-            <select className="o-select" defaultValue={editing?.role || "kitchen"} style={{ height: 40 }}>
+            <select className="o-select" value={form.role} onChange={(e) => update("role", e.target.value)} style={{ height: 40 }}>
               <option value="owner">เจ้าของร้าน</option>
               <option value="manager">ผู้จัดการ</option>
               <option value="kitchen">ครัว</option>
@@ -559,7 +698,7 @@ function OStaff({ ctx }) {
         {editing === "new" && (
           <div className="o-form-row">
             <label>รหัสผ่านเริ่มต้น *</label>
-            <input className="o-input" type="password" placeholder="••••••••" />
+            <input className="o-input" type="password" value={form.password} onChange={(e) => update("password", e.target.value)} placeholder="••••••••" />
             <div className="hint">พนักงานต้องเปลี่ยนรหัสผ่านในการเข้าใช้ครั้งแรก</div>
           </div>
         )}

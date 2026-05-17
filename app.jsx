@@ -3,6 +3,32 @@
 const { useState: useStateApp, useEffect: useEffectApp, useMemo: useMemoApp,
         useCallback: useCallbackApp, useRef: useRefApp } = React;
 
+// API menu item (snake_case) → UI shape (camelCase) ที่ทุก screen + DishArt ใช้
+// **สำคัญ**: DishArt อ่าน item.imageUrl เท่านั้น — ถ้าใช้ key อื่นรูปจะไม่ขึ้น
+function normalizeCustomerMenuItem(m) {
+  return {
+    id:        m.id,
+    name:      m.name,
+    nameEn:    m.name_en ?? m.nameEn ?? "",
+    cat:       m.category_id ?? m.cat,
+    price:     parseFloat(m.price ?? 0),
+    imageUrl:  m.image_url ?? m.imageUrl ?? m.image ?? null,
+    desc:      m.description ?? m.desc ?? "",
+    rec:       m.is_recommended ?? m.rec ?? false,
+    available: m.is_available ?? m.available ?? true,
+    rating:    parseFloat(m.rating ?? 4.5),
+    reviews:   m.review_count ?? m.reviews ?? 0,
+  };
+}
+
+function normalizeCustomerCategory(c) {
+  return {
+    id:     c.id,
+    name:   c.name,
+    nameEn: c.name_en ?? c.nameEn ?? "",
+  };
+}
+
 function App() {
   const [page, setPage]           = useStateApp("welcome");
   const [pageDir, setPageDir]     = useStateApp("forward");
@@ -72,8 +98,11 @@ function App() {
           API.menu.list(),
           API.menu.categories(),
         ]);
-        setMenuItems(items);
-        setCategories(cats);
+        // Normalize เพื่อให้รูป/คำอธิบาย/หมวด ขึ้นทั้งหมด
+        setMenuItems((items || []).map(normalizeCustomerMenuItem));
+        const apiCats = (cats || []).map(normalizeCustomerCategory);
+        // Prepend "รายการแนะนำ" ให้ตรงกับ mock เดิม
+        setCategories([{ id: "rec", name: "แนะนำ", nameEn: "Recommended" }, ...apiCats]);
       } catch {
         // Fallback to mock data when API is unavailable
         setMenuItems(window.MENU || []);

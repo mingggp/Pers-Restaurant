@@ -146,6 +146,42 @@ const kitchen = {
   stats()    { return get("/api/kitchen/stats"); },
 };
 
+// ── Upload (รูปเมนู) ───────────────────────────────────────
+// รับได้ทั้ง File/Blob (จาก <input type="file">) และ data URL (จาก canvas)
+// คืน { url: "/uploads/xxx.jpg", ... }
+const uploads = {
+  async image(fileOrBlobOrDataUrl) {
+    let blob = fileOrBlobOrDataUrl;
+    if (typeof fileOrBlobOrDataUrl === "string" && fileOrBlobOrDataUrl.startsWith("data:")) {
+      // แปลง data URL → Blob
+      const resBlob = await fetch(fileOrBlobOrDataUrl);
+      blob = await resBlob.blob();
+    }
+    const form = new FormData();
+    // ตั้งชื่อ default ถ้าเป็น Blob (ไม่มี name)
+    const filename = (blob && blob.name) || "menu.jpg";
+    form.append("image", blob, filename);
+
+    const token = getToken();
+    const res = await fetch(BASE_URL + "/api/upload", {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error || `Upload failed (HTTP ${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    // แปลง relative URL → absolute เพื่อให้ <img src> ใช้งานได้ตรงๆ
+    const url = data.url && data.url.startsWith("/")
+      ? BASE_URL + data.url
+      : data.url;
+    return { ...data, url };
+  },
+};
+
 // ── Owner ──────────────────────────────────────────────────
 const owner = {
   dashboard()              { return get("/api/owner/dashboard"); },
@@ -158,6 +194,9 @@ const owner = {
   setTableStatus(id, status) {
     return patch(`/api/owner/tables/${id}`, { status });
   },
+  createTable(body)        { return post("/api/owner/tables", body); },
+  updateTable(id, body)    { return put(`/api/owner/tables/${id}`, body); },
+  deleteTable(id)          { return del(`/api/owner/tables/${id}`); },
   staff: {
     list()           { return get("/api/owner/staff"); },
     create(body)     { return post("/api/owner/staff", body); },
@@ -218,4 +257,4 @@ function connectWS(onMessage, hooks = {}) {
 }
 
 // ── Export ─────────────────────────────────────────────────
-window.API = { auth, menu, orders, kitchen, owner, connectWS, getToken, setToken, BASE_URL, WS_URL };
+window.API = { auth, menu, orders, kitchen, owner, uploads, connectWS, getToken, setToken, BASE_URL, WS_URL };

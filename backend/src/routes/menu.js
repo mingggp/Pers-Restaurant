@@ -168,11 +168,31 @@ router.patch('/:id/availability', requireRole('owner'), asyncHandler(async (req,
 
 // ──────────────────────────────────────────────────────────
 // DELETE /menu/:id (owner only)
+// ถ้าเมนูเคยถูกสั่งแล้ว → soft delete (ปิดขาย) เพื่อไม่ให้ FK พัง
 // ──────────────────────────────────────────────────────────
 router.delete('/:id', requireRole('owner'), asyncHandler(async (req, res) => {
+  const id = req.params.id;
+
+  // ตรวจก่อนว่ามี order_items ที่อ้างถึงเมนูนี้หรือไม่
+  const { rows: refs } = await db.query(
+    'SELECT 1 FROM order_items WHERE menu_item_id = $1 LIMIT 1',
+    [id]
+  );
+
+  if (refs.length > 0) {
+    // มีออเดอร์เก่าอ้างอยู่ — ใช้ soft delete แทน
+    const { rowCount } = await db.query(
+      `UPDATE menu_items SET is_available = FALSE, updated_at = NOW()
+       WHERE id = $1`,
+      [id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Item not found' });
+    return res.json({ softDeleted: true, message: 'มีออเดอร์เก่าอ้างถึงเมนูนี้ ระบบจะปิดขายแทนการลบ' });
+  }
+
   const { rowCount } = await db.query(
     'DELETE FROM menu_items WHERE id = $1',
-    [req.params.id]
+    [id]
   );
   if (!rowCount) return res.status(404).json({ error: 'Item not found' });
   res.status(204).end();

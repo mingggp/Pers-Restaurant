@@ -112,13 +112,29 @@ Authorization: Bearer <token>
 | `GET` | `/api/owner/dashboard` | owner | KPIs + top items + hourly + pending |
 | `GET` | `/api/owner/orders` | owner | Paginated orders with filters |
 | `GET` | `/api/owner/reports` | owner | Revenue reports |
-| `GET` | `/api/owner/tables` | owner | Table status |
-| `PATCH`| `/api/owner/tables/:id` | owner | Update table status |
+| `GET` | `/api/owner/tables` | owner | Table list (with capacity, zone, is_active) |
+| `POST` | `/api/owner/tables` | owner | Add table (body: `id`, `capacity`, `zone`, `label`, `isActive`) |
+| `PUT` | `/api/owner/tables/:id` | owner | Edit table |
+| `PATCH`| `/api/owner/tables/:id` | owner | Update table status (`empty`/`occupied`/`reserved`) |
+| `DELETE`| `/api/owner/tables/:id` | owner | Delete (soft-delete ถ้ามี orders อ้าง) |
 | `GET` | `/api/owner/staff` | owner | Staff list |
 | `POST` | `/api/owner/staff` | owner | Add staff |
 | `PUT` | `/api/owner/staff/:id` | owner | Edit staff |
 | `DELETE`| `/api/owner/staff/:id` | owner | Deactivate staff |
 | `GET` | `/api/owner/audit` | owner | Audit log |
+
+---
+
+## Upload
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/upload` | owner | อัปโหลดรูป (multipart, field `image`) — คืน `{ url: "/uploads/xxx.jpg" }` |
+| `GET`  | `/uploads/*` | — | ดาวน์โหลดไฟล์ที่อัปโหลด (public) |
+
+**ข้อจำกัด:** JPG/PNG/WebP เท่านั้น, สูงสุด 5MB/ไฟล์
+
+**Production note:** ไฟล์ถูกเก็บใน `backend/uploads/` (local disk) — บน Render free tier ดิสก์เป็น ephemeral (หายตอน redeploy) แนะนำให้ใช้ Render Persistent Disk add-on หรือย้ายไป S3/Cloudinary สำหรับ production จริงจัง
 
 ---
 

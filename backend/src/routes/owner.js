@@ -195,7 +195,7 @@ router.get('/reports', asyncHandler(async (req, res) => {
 // ──────────────────────────────────────────────────────────
 router.get('/tables', asyncHandler(async (req, res) => {
   const { rows } = await db.query(
-    `SELECT t.id, t.label, t.status, t.qr_code, t.updated_at,
+    `SELECT t.id, t.label, t.status, t.qr_code, t.capacity, t.zone, t.is_active, t.updated_at,
             json_agg(
               json_build_object('id', o.id, 'order_number', o.order_number, 'status', o.status)
             ) FILTER (WHERE o.id IS NOT NULL) AS active_orders
@@ -207,6 +207,66 @@ router.get('/tables', asyncHandler(async (req, res) => {
   res.json(rows);
 }));
 
+// POST /owner/tables — เพิ่มโต๊ะใหม่
+router.post('/tables', asyncHandler(async (req, res) => {
+  const { id, number, capacity, zone, label, isActive } = req.body;
+  const tableId = Number(id ?? number);
+
+  if (!Number.isInteger(tableId) || tableId <= 0) {
+    return res.status(400).json({ error: 'id (เลขโต๊ะ) ต้องเป็นจำนวนเต็มบวก' });
+  }
+
+  // Check duplicate
+  const { rows: dup } = await db.query(
+    'SELECT id FROM restaurant_tables WHERE id = $1',
+    [tableId]
+  );
+  if (dup.length) {
+    return res.status(409).json({ error: `โต๊ะหมายเลข ${tableId} มีอยู่แล้ว` });
+  }
+
+  const { rows } = await db.query(
+    `INSERT INTO restaurant_tables (id, label, capacity, zone, is_active, status)
+     VALUES ($1, $2, $3, $4, $5, 'empty')
+     RETURNING *`,
+    [tableId, label || `โต๊ะ ${tableId}`, Number(capacity) || 4, zone || 'ในร้าน', isActive !== false]
+  );
+
+  await db.query(
+    `INSERT INTO audit_log (staff_id, action, entity_type, entity_id, after_data)
+     VALUES ($1, 'table.create', 'table', $2, $3)`,
+    [req.user.sub, String(tableId), JSON.stringify(rows[0])]
+  );
+
+  res.status(201).json(rows[0]);
+}));
+
+// PUT /owner/tables/:id — แก้ไขโต๊ะ (capacity, zone, label, isActive)
+router.put('/tables/:id', asyncHandler(async (req, res) => {
+  const { capacity, zone, label, isActive } = req.body;
+
+  const { rows } = await db.query(
+    `UPDATE restaurant_tables SET
+       capacity   = COALESCE($1, capacity),
+       zone       = COALESCE($2, zone),
+       label      = COALESCE($3, label),
+       is_active  = COALESCE($4, is_active),
+       updated_at = NOW()
+     WHERE id = $5
+     RETURNING *`,
+    [
+      capacity != null ? Number(capacity) : null,
+      zone || null,
+      label || null,
+      typeof isActive === 'boolean' ? isActive : null,
+      req.params.id,
+    ]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'Table not found' });
+  res.json(rows[0]);
+}));
+
+// PATCH /owner/tables/:id — รองรับของเดิม (เปลี่ยน status)
 router.patch('/tables/:id', asyncHandler(async (req, res) => {
   const { status } = req.body;
   const valid = ['empty', 'occupied', 'reserved'];
@@ -220,6 +280,34 @@ router.patch('/tables/:id', asyncHandler(async (req, res) => {
   );
   if (!rows.length) return res.status(404).json({ error: 'Table not found' });
   res.json(rows[0]);
+}));
+
+// DELETE /owner/tables/:id — ลบโต๊ะ (soft-delete ถ้ามี orders อ้างอยู่)
+router.delete('/tables/:id', asyncHandler(async (req, res) => {
+  const id = req.params.id;
+
+  const { rows: refs } = await db.query(
+    'SELECT 1 FROM orders WHERE table_id = $1 LIMIT 1',
+    [id]
+  );
+
+  if (refs.length > 0) {
+    // มี order เก่าอ้างถึง → soft delete (ปิดใช้งาน)
+    const { rowCount } = await db.query(
+      `UPDATE restaurant_tables SET is_active = FALSE, updated_at = NOW()
+       WHERE id = $1`,
+      [id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Table not found' });
+    return res.json({ softDeleted: true, message: 'มีออเดอร์เก่าอ้างถึงโต๊ะนี้ ระบบจะปิดใช้งานแทนการลบ' });
+  }
+
+  const { rowCount } = await db.query(
+    'DELETE FROM restaurant_tables WHERE id = $1',
+    [id]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Table not found' });
+  res.status(204).end();
 }));
 
 // ──────────────────────────────────────────────────────────
