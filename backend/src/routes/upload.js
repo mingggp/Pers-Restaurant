@@ -18,25 +18,36 @@ const { requireRole } = require('../middleware/auth');
 
 // ──────────────────────────────────────────────────────────
 // Cloudinary setup (เลือกโหมดอัตโนมัติตาม env vars)
+// รองรับ 2 แบบ:
+//   (a) CLOUDINARY_URL=cloudinary://key:secret@cloud_name (แบบบรรทัดเดียว)
+//   (b) CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET
 // ──────────────────────────────────────────────────────────
-const USE_CLOUDINARY = !!(
+const HAS_CLOUDINARY_URL = !!process.env.CLOUDINARY_URL;
+const HAS_CLOUDINARY_KEYS = !!(
   process.env.CLOUDINARY_CLOUD_NAME &&
   process.env.CLOUDINARY_API_KEY &&
   process.env.CLOUDINARY_API_SECRET
 );
+const USE_CLOUDINARY = HAS_CLOUDINARY_URL || HAS_CLOUDINARY_KEYS;
 
 let cloudinary = null;
 if (USE_CLOUDINARY) {
   cloudinary = require('cloudinary').v2;
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key:    process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-    secure:     true,
-  });
-  console.log('[upload] mode: Cloudinary (', process.env.CLOUDINARY_CLOUD_NAME, ')');
+  if (HAS_CLOUDINARY_URL) {
+    // SDK auto-config จาก CLOUDINARY_URL env (Cloudinary v2 จัดการให้เอง)
+    cloudinary.config({ secure: true });
+    console.log('[upload] mode: Cloudinary (via CLOUDINARY_URL,', cloudinary.config().cloud_name, ')');
+  } else {
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key:    process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+      secure:     true,
+    });
+    console.log('[upload] mode: Cloudinary (via separate keys,', process.env.CLOUDINARY_CLOUD_NAME, ')');
+  }
 } else {
-  console.log('[upload] mode: local disk (set CLOUDINARY_* env vars for cloud storage)');
+  console.log('[upload] mode: local disk (set CLOUDINARY_URL หรือ CLOUDINARY_* แยก สำหรับ cloud storage)');
 }
 
 // ──────────────────────────────────────────────────────────

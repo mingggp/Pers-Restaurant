@@ -109,9 +109,12 @@ function OwnerApp() {
         }
         if (catsRes.status === "fulfilled") {
           const list = Array.isArray(catsRes.value) ? catsRes.value : [];
-          // Prepend "rec" tab, then API categories
           const apiCats = list.map(c => ({ id: c.id, name: c.name, nameEn: c.name_en || c.nameEn || "", active: true }));
-          setCategories([{ id: "rec", name: "แนะนำ", nameEn: "Recommended", active: true }, ...apiCats]);
+          // ใช้ API categories ตรงๆ — prepend "rec" เฉพาะเมื่อ API ไม่ได้ส่ง "rec" มา
+          const hasRec = apiCats.some(c => c.id === "rec");
+          setCategories(hasRec
+            ? apiCats
+            : [{ id: "rec", name: "แนะนำ", nameEn: "Recommended", active: true }, ...apiCats]);
         }
         if (staffRes.status === "fulfilled") {
           const list = Array.isArray(staffRes.value) ? staffRes.value : [];

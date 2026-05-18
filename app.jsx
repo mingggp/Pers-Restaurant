@@ -100,9 +100,13 @@ function App() {
         ]);
         // Normalize เพื่อให้รูป/คำอธิบาย/หมวด ขึ้นทั้งหมด
         setMenuItems((items || []).map(normalizeCustomerMenuItem));
+
         const apiCats = (cats || []).map(normalizeCustomerCategory);
-        // Prepend "รายการแนะนำ" ให้ตรงกับ mock เดิม
-        setCategories([{ id: "rec", name: "แนะนำ", nameEn: "Recommended" }, ...apiCats]);
+        // ใช้ API categories ตรงๆ ถ้าไม่มี "rec" ใน list (เช่นถูกลบ) จึง prepend ให้
+        const hasRec = apiCats.some(c => c.id === "rec");
+        setCategories(hasRec
+          ? apiCats
+          : [{ id: "rec", name: "แนะนำ", nameEn: "Recommended" }, ...apiCats]);
       } catch {
         // Fallback to mock data when API is unavailable
         setMenuItems(window.MENU || []);
