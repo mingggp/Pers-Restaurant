@@ -129,12 +129,26 @@ Authorization: Bearer <token>
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/api/upload` | owner | อัปโหลดรูป (multipart, field `image`) — คืน `{ url: "/uploads/xxx.jpg" }` |
-| `GET`  | `/uploads/*` | — | ดาวน์โหลดไฟล์ที่อัปโหลด (public) |
+| `POST` | `/api/upload` | owner | อัปโหลดรูป (multipart, field `image`) — คืน `{ url, publicId, provider, ... }` |
+| `GET`  | `/uploads/*` | — | ดาวน์โหลดไฟล์ที่อัปโหลด (เฉพาะ local mode) |
 
 **ข้อจำกัด:** JPG/PNG/WebP เท่านั้น, สูงสุด 5MB/ไฟล์
 
-**Production note:** ไฟล์ถูกเก็บใน `backend/uploads/` (local disk) — บน Render free tier ดิสก์เป็น ephemeral (หายตอน redeploy) แนะนำให้ใช้ Render Persistent Disk add-on หรือย้ายไป S3/Cloudinary สำหรับ production จริงจัง
+**Provider switching** (อัตโนมัติตาม env vars):
+- ถ้ามี `CLOUDINARY_CLOUD_NAME` + `CLOUDINARY_API_KEY` + `CLOUDINARY_API_SECRET` → ใช้ **Cloudinary** (production)
+  - รูปถูก resize อัตโนมัติเป็น ≤ 1200×1200 px และ optimize ด้วย `quality: auto:good`
+  - Cloudinary จะแปลง WebP/AVIF อัตโนมัติเวลา serve ตาม browser
+  - เก็บใน folder `pers-restaurant/menu/`
+- ถ้าไม่มี → fallback ไปเก็บ **local disk** (`backend/uploads/`) สำหรับ dev/local
+
+**Response shape:**
+```json
+{
+  "url": "https://res.cloudinary.com/.../image/upload/.../xxx.jpg",
+  "publicId": "pers-restaurant/menu/abc123",
+  "provider": "cloudinary"
+}
+```
 
 ---
 
